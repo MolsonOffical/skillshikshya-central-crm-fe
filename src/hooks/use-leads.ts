@@ -8,6 +8,8 @@ import {
 import { toast } from "sonner";
 import { useDataSource } from "@/context/data-source";
 import { apiErrorMessage } from "@/lib/api";
+import type { AddCallPayload } from "@/services/leads.service";
+import { formatBalance } from "@/lib/duration";
 import {
   adaptApiCall,
   adaptApiActivity,
@@ -403,14 +405,16 @@ export function useAssignLead() {
   });
 }
 
-export type AddCallPayload = Partial<ApiLeadCall> & { duration_input?: string | null };
-
 export function useAddCall(leadId: number | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: AddCallPayload) => leadsService.addCall(leadId as number, payload),
-    onSuccess: () => {
-      toast.success("Call logged");
+    onSuccess: (data) => {
+      toast.success(
+        data.remaining_seconds != null
+          ? `Call logged. ${formatBalance(data.remaining_seconds)} left in your balance.`
+          : "Call logged",
+      );
       void qc.invalidateQueries({ queryKey: ["lead"] });
       void qc.invalidateQueries({ queryKey: ["leads"] });
       void qc.invalidateQueries({ queryKey: ["calls"] });

@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
+import { isAxiosError } from "axios";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -99,7 +99,7 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
   const durationText = call.duration.trim();
 const durationSeconds = durationText ? parseDurationToSeconds(durationText) : null;
 const durationInvalid = durationText !== "" && durationSeconds === null;
-
+const [durationError, setDurationError] = useState<string | null>(null);
   // Pre-select the current owner when the Assign dialog opens.
   useEffect(() => {
     if (action === "assign") setAssignTo(lead?.assignedTo ?? "");
@@ -120,7 +120,19 @@ const durationInvalid = durationText !== "" && durationSeconds === null;
     toast.success(message, { description: "Static prototype — no data was changed." });
     onClose();
   }
-
+  function durationMessageFrom(err: unknown): string | null {
+    if (!isAxiosError(err)) return null;
+    const data: unknown = err.response?.data;
+    if (/insufficient/i.test(JSON.stringify(data ?? ""))) {
+      return "Insufficient call minutes for this call.";
+    }
+    if (data && typeof data === "object") {
+      const d = data as Record<string, unknown>;
+      const msg = d.duration_input ?? d.duration_seconds;
+      if (msg) return Array.isArray(msg) ? String(msg[0]) : String(msg);
+    }
+    return null;
+  }
   function submitCall() {
     // Mock path (or a lead with no backend id) can't persist — keep the toast.
     if (isMock || lead?.apiId == null) {
@@ -145,8 +157,10 @@ const durationInvalid = durationText !== "" && durationSeconds === null;
       {
         onSuccess: () => {
           setCall(EMPTY_CALL);
+          setDurationError(null);
           onClose();
         },
+        onError: (err) => setDurationError(durationMessageFrom(err)),
       },
     );
   }
@@ -219,29 +233,37 @@ const durationInvalid = durationText !== "" && durationSeconds === null;
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Duration (minutes)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 4"
-                  value={call.duration}
-                  onChange={(e) => setC("duration", e.target.value)}
-                />
-              </div>
+              
+            </div>
+              <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Duration (MM:SS)</Label>
                 <Input
                   placeholder="MM:SS, e.g. 4:19"
                   value={call.duration}
-                  aria-invalid={durationInvalid}
-                  onChange={(e) => setC("duration", e.target.value)}
+                  aria-invalid={durationInvalid || durationError !== null}
+                  onChange={(e) => {
+                    setC("duration", e.target.value);
+                    setDurationError(null);
+                  }}
                 />
-                {durationInvalid ? (
-                  <p className="text-xs text-destructive">Invalid duration. Try 4:19, 4.19, 4m19s or 259.</p>
+                {durationError ? (
+                  <p className="text-xs text-destructive">{durationError}</p>
+                ) : durationInvalid ? (
+                  <p className="text-xs text-destructive">
+                    Invalid duration. Try 4:19, 4.19, 4m19s or 259.
+                  </p>
                 ) : durationSeconds !== null ? (
                   <p className="text-xs text-muted-foreground">= {describeDuration(durationSeconds)}</p>
                 ) : null}
+              </div>
+              <div className="grid gap-2">
+                <Label>Recording link</Label>
+                <Input
+                  placeholder="Optional URL"
+                  value={call.recording}
+                  onChange={(e) => setC("recording", e.target.value)}
+                />
               </div>
             </div>
             <div className="grid gap-2">

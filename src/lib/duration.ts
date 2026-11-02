@@ -47,3 +47,8 @@ export function parseDurationToSeconds(input: string): number | null {
 export function describeDuration(totalSeconds: number): string {
   return `${Math.floor(totalSeconds / 60)} min ${totalSeconds % 60} sec`;
 }
+export function formatBalance(totalSeconds: number): string {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
