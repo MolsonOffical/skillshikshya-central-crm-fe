@@ -403,14 +403,18 @@ export function useAssignLead() {
   });
 }
 
-export function useAddCall(leadId?: number) {
+export type AddCallPayload = Partial<ApiLeadCall> & { duration_input?: string | null };
+
+export function useAddCall(leadId: number | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<ApiLeadCall>) => leadsService.addCall(leadId as number, payload),
+    mutationFn: (payload: AddCallPayload) => leadsService.addCall(leadId as number, payload),
     onSuccess: () => {
       toast.success("Call logged");
       void qc.invalidateQueries({ queryKey: ["lead"] });
       void qc.invalidateQueries({ queryKey: ["leads"] });
+      void qc.invalidateQueries({ queryKey: ["calls"] });
+      void qc.invalidateQueries({ queryKey: ["call-minutes"] });
     },
     onError: (e) => toast.error(apiErrorMessage(e, "Could not log call")),
   });

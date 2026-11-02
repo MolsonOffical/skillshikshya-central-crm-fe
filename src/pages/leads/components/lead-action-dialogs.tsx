@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +26,7 @@ import { CALL_OUTCOMES, COUNSELORS, counselorName } from "@/data/lead-lookups";
 import { formatDateToNepalIso, toNepalIso } from "@/lib/leads-format";
 import { useAddCall, useAddFollowup, useAssignLead } from "@/hooks/use-leads";
 import { useCounselors } from "@/hooks/use-users";
-
+import { describeDuration, parseDurationToSeconds } from "@/lib/duration";
 export type LeadAction = "log_call" | "follow_up" | "assign" | null;
 
 /** Minimal shape the dialogs need — satisfied by both Lead and LeadListItem. */
@@ -95,6 +96,9 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
   const [call, setCall] = useState<CallForm>(EMPTY_CALL);
   const [fu, setFu] = useState<FollowUpForm>(EMPTY_FU);
   const [assignTo, setAssignTo] = useState("");
+  const durationText = call.duration.trim();
+const durationSeconds = durationText ? parseDurationToSeconds(durationText) : null;
+const durationInvalid = durationText !== "" && durationSeconds === null;
 
   // Pre-select the current owner when the Assign dialog opens.
   useEffect(() => {
@@ -124,13 +128,14 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
       setCall(EMPTY_CALL);
       return;
     }
+    if (durationInvalid) return;
     addCall.mutate(
       {
         call_timestamp: new Date().toISOString(),
         caller: user?.id ?? null,
         direction: call.direction,
         outcome: call.outcome || null,
-        duration_seconds: call.duration ? Math.round(Number(call.duration) * 60) : null,
+        duration_input: durationText || null,
         recording_url: call.recording.trim() || null,
         notes: call.notes.trim() || null,
         next_followup_at: call.nextFollowUp ? toNepalIso(call.nextFollowUp) : null,
@@ -225,12 +230,18 @@ export function LeadActionDialogs({ action, lead, onClose }: Props) {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Recording link</Label>
+                <Label>Duration (MM:SS)</Label>
                 <Input
-                  placeholder="Optional URL"
-                  value={call.recording}
-                  onChange={(e) => setC("recording", e.target.value)}
+                  placeholder="MM:SS, e.g. 4:19"
+                  value={call.duration}
+                  aria-invalid={durationInvalid}
+                  onChange={(e) => setC("duration", e.target.value)}
                 />
+                {durationInvalid ? (
+                  <p className="text-xs text-destructive">Invalid duration. Try 4:19, 4.19, 4m19s or 259.</p>
+                ) : durationSeconds !== null ? (
+                  <p className="text-xs text-muted-foreground">= {describeDuration(durationSeconds)}</p>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-2">
