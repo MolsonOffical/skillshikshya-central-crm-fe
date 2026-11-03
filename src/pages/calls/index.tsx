@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, ExternalLink, PhoneCall, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, ExternalLink, Loader2, PhoneCall, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HBarList, MiniBars } from "@/components/charts";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/context/auth";
 import { useBranches } from "@/hooks/use-branches";
-import { useCalls } from "@/hooks/use-calls";
+import { useCallSummary, useCalls, useExportCalls } from "@/hooks/use-calls";
 import { useUsers } from "@/hooks/use-users";
 import { formatDateTime } from "@/lib/leads-format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -96,6 +97,25 @@ function SortHead({
   );
 }
 
+function formatAvg(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  
+  function StatCard({ label, value, hint, loading }: { label: string; value: string; hint?: string; loading: boolean }) {
+    return (
+      <div className="bg-card rounded-2xl border p-4">
+        <p className="text-muted-foreground font-mono text-[11px] font-bold tracking-wider uppercase">{label}</p>
+        {loading ? (
+          <Skeleton className="mt-2 h-8 w-24" />
+        ) : (
+          <p className="font-headline mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        )}
+        {hint && !loading && <p className="text-muted-foreground mt-0.5 text-xs">{hint}</p>}
+      </div>
+    );
+  }
 export default function CallsPage() {
   const { user } = useAuth();
   const isStaff = !!user && (user.is_staff || user.is_superuser);
@@ -154,6 +174,11 @@ export default function CallsPage() {
 
   const listParams: CallListParams = { ...filters, ordering, page, page_size: PAGE_SIZE };
   const callsQ = useCalls(listParams);
+  const summaryQ = useCallSummary(filters);
+  const exportCalls = useExportCalls();
+  const s = summaryQ.data;
+  const days = s?.by_day ?? [];
+  const callers = s?.by_user ?? [];
 
   const rows = callsQ.data?.results ?? [];
   const count = callsQ.data?.count ?? 0;
@@ -254,7 +279,63 @@ export default function CallsPage() {
           </Button>
         )}
       </div>
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          disabled={exportCalls.isPending}
+          onClick={() => exportCalls.mutate(filters)}
+        >
+          {exportCalls.isPending ? <Loader2 className="animate-spin" /> : <Download />}
+          Export CSV
+        </Button>
+      </div>
 
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total calls"
+          value={String(s?.total_calls ?? 0)}
+          hint={`${s?.inbound ?? 0} inbound · ${s?.outbound ?? 0} outbound`}
+          loading={summaryQ.isLoading}
+        />
+        <StatCard label="Talk time" value={s?.total_formatted ?? "00:00:00"} loading={summaryQ.isLoading} />
+        <StatCard
+          label="Average duration"
+          value={formatAvg(s?.avg_seconds ?? 0)}
+          loading={summaryQ.isLoading}
+        />
+        <StatCard
+          label="Connect rate"
+          value={`${Math.round((s?.connect_rate ?? 0) * 100)}%`}
+          hint={`${s?.connected_calls ?? 0} connected`}
+          loading={summaryQ.isLoading}
+        />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="bg-card rounded-2xl border p-4">
+          <p className="mb-1 text-sm font-semibold">Calls per day</p>
+          {days.length === 0 ? (
+            <p className="text-muted-foreground py-6 text-center text-sm">No calls in this period.</p>
+          ) : (
+            <>
+              <MiniBars values={days.map((d) => d.calls)} />
+              <div className="text-muted-foreground mt-1 flex justify-between text-xs">
+                <span>{days[0].date}</span>
+                <span>{days[days.length - 1].date}</span>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="bg-card rounded-2xl border p-4">
+          <p className="mb-2 text-sm font-semibold">Top callers</p>
+          {callers.length === 0 ? (
+            <p className="text-muted-foreground py-6 text-center text-sm">No calls in this period.</p>
+          ) : (
+            <HBarList data={callers.map((c) => ({ label: c.name, value: c.calls }))} />
+          )}
+        </div>
+      </div>
+      
       <div className="bg-card overflow-hidden rounded-2xl border shadow-[0_1px_3px_0_rgba(0,0,0,0.05),0_1px_2px_-1px_rgba(0,0,0,0.05)]">
         <div className="overflow-x-auto">
           <Table>
