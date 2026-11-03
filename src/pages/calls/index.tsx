@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HBarList, MiniBars } from "@/components/charts";
+import { CallDetailSheet } from "./call-detail-sheet";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -20,7 +21,7 @@ import { useCallSummary, useCalls, useExportCalls } from "@/hooks/use-calls";
 import { useUsers } from "@/hooks/use-users";
 import { formatDateTime } from "@/lib/leads-format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
-import type { CallDirection, CallListParams } from "@/types/calls";
+import type { CallDirection, CallListParams, CallRow } from "@/types/calls";
 
 const PAGE_SIZE = 20;
 const DEFAULT_ORDERING = "-call_timestamp";
@@ -151,6 +152,7 @@ export default function CallsPage() {
 
   // Debounced search: only write to the URL once the typed text has settled.
   const [searchInput, setSearchInput] = useState(q);
+  const [selected, setSelected] = useState<CallRow | null>(null);
   const debouncedSearch = useDebouncedValue(searchInput, 400);
   useEffect(() => {
     if (debouncedSearch === searchInput && debouncedSearch !== q) update({ q: debouncedSearch });
@@ -381,7 +383,7 @@ export default function CallsPage() {
                 </TableRow>
               )}
               {rows.map((c) => (
-                <TableRow key={c.id}>
+                <TableRow key={c.id} className="cursor-pointer" onClick={() => setSelected(c)}>
                   <TableCell className="text-muted-foreground whitespace-nowrap">
                     {formatDateTime(c.call_timestamp)}
                   </TableCell>
@@ -391,7 +393,10 @@ export default function CallsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Link to={`/leads/${c.lead}`} className="font-semibold hover:underline">
+                    <Link to={`/leads/${c.lead}`} 
+                    className="font-semibold hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                    >
                       {c.lead_name}
                     </Link>
                     <p className="text-muted-foreground font-mono text-xs">{c.lead_reference_number}</p>
@@ -446,6 +451,7 @@ export default function CallsPage() {
           </div>
         </div>
       </div>
+      <CallDetailSheet call={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
